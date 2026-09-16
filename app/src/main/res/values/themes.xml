@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.EstoqueChocolate" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:statusBarColor">@color/marrom_escuro</item>
+        <item name="android:windowBackground">@color/fundo</item>
+    </style>
+</resources>
