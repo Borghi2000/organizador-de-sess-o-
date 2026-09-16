@@ -9,10 +9,16 @@ on:
 permissions:
   contents: write
 
+# Um push novo cancela o build anterior da mesma branch, em vez de deixar dois disputando runner.
+concurrency:
+  group: apk-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   regras:
     name: Testar as regras de estoque
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
@@ -29,7 +35,7 @@ jobs:
       # PVPS ou divergencia quebrar, o APK nem chega a ser compilado.
       - name: Rodar os testes do core
         working-directory: core
-        run: ../gradlew test --no-daemon
+        run: ../gradlew test --no-daemon --console=plain
 
       - name: Guardar o relatorio dos testes
         if: always()
@@ -43,6 +49,7 @@ jobs:
     name: Gerar o APK assinado
     needs: regras
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
 
@@ -55,8 +62,15 @@ jobs:
       - name: Preparar Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      # Passo separado e barato: se o build travar aqui, o problema e a configuracao do projeto
+      # (inclusive a ligacao com o core), e nao a compilacao em si.
+      - name: Conferir a configuracao do projeto
+        timeout-minutes: 10
+        run: ./gradlew projects --no-daemon --console=plain --stacktrace
+
       - name: Compilar o APK de release
-        run: ./gradlew assembleRelease --no-daemon
+        timeout-minutes: 30
+        run: ./gradlew assembleRelease --no-daemon --console=plain --stacktrace
 
       - name: Renomear o APK
         run: |
