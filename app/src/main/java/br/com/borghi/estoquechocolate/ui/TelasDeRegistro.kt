@@ -272,12 +272,9 @@ fun RegistrarPerdaTela(vm: EstoqueViewModel, estado: EstadoDoEstoque, voltar: ()
     var segregando by remember { mutableStateOf(false) }
     var erros by remember { mutableStateOf<List<String>>(emptyList()) }
 
-    // Para perda por vencimento a lista comeca pelos lotes vencidos; para o resto, pelo PVPS.
-    val lotesOrdenados = if (tipo == TipoMovimentacao.PERDA_VENCIMENTO) {
-        Pvps.ordenar(estado.lotes.filter { it.quantidadeAtual.ehPositiva })
-    } else {
-        Pvps.ordenar(estado.lotes.filter { it.quantidadeAtual.ehPositiva })
-    }
+    // Ordem PVPS: o vencido e o que vence primeiro aparecem no topo da lista, que e justamente
+    // o que se procura ao registrar uma perda.
+    val lotesOrdenados = Pvps.ordenar(estado.lotes.filter { it.quantidadeAtual.ehPositiva })
 
     val rascunho = RascunhoMovimentacao(
         tipo = tipo,

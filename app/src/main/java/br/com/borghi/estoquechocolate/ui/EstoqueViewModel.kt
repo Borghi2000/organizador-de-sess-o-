@@ -197,16 +197,19 @@ class EstoqueViewModel(private val repositorio: EstoqueRepositorio) : ViewModel(
             aoTerminar(ResultadoAcao.Bloqueado(listOf("Lote nao encontrado")))
             return
         }
+        // A validacao acima ja garante que estes campos existem, mas o tipo vem de outro modulo,
+        // entao o compilador nao carrega a garantia adiante: guardamos em variaveis locais.
+        val tipo = rascunho.tipo!!
         val resultado = Operacoes.baixaDeLote(
             lote = lote,
-            tipo = rascunho.tipo!!,
+            tipo = tipo,
             quantidade = Quantidade.deTexto(rascunho.quantidade)!!,
             origem = rascunho.localOrigem!!,
             agora = agora(),
             observacao = rascunho.observacao.trim(),
             gerarId = ::novoId,
         )
-        aplicarEResponder(resultado, "${rascunho.tipo.rotulo} registrada.", aoTerminar)
+        aplicarEResponder(resultado, "${tipo.rotulo} registrada.", aoTerminar)
     }
 
     fun registrarSaida(
