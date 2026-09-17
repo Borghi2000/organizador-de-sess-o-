@@ -1,6 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!--
+      Camera: usada so quando voce abre um leitor. O reconhecimento roda no proprio aparelho.
+      Notificacao: usada so pelo aviso das 8h, que voce liga em Ajustes.
+      Internet: fica desligada na pratica. So e usada se voce ligar a ajuda por IA em Ajustes e
+      colar sua propria chave; sem isso o app nunca abre conexao.
+    -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <uses-feature android:name="android.hardware.camera.any" android:required="false" />
+
     <application
         android:name=".EstoqueApp"
         android:allowBackup="true"

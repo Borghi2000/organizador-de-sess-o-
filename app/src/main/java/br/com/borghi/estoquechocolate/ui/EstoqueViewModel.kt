@@ -29,6 +29,7 @@ import br.com.borghi.estoquechocolate.core.relatorio.Relatorio
 import br.com.borghi.estoquechocolate.dados.EstadoDoEstoque
 import br.com.borghi.estoquechocolate.dados.EstoqueRepositorio
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -77,8 +78,18 @@ class EstoqueViewModel(private val repositorio: EstoqueRepositorio) : ViewModel(
 
     // ----------------------------------------------------------------- produtos
 
-    fun salvarProduto(rascunho: RascunhoProduto, aoTerminar: (ResultadoAcao) -> Unit) {
-        val validacao = rascunho.validar(estado.value.produtos.map { it.codigo }.toSet())
+    fun salvarProduto(
+        rascunho: RascunhoProduto,
+        editando: Boolean = false,
+        aoTerminar: (ResultadoAcao) -> Unit,
+    ) {
+        val outros = estado.value.produtos.filterNot { it.codigo == rascunho.codigo.trim() }
+        val validacao = rascunho.validar(
+            codigosExistentes = if (editando) emptySet() else estado.value.produtos.map { it.codigo }.toSet(),
+            codigosDeBarrasExistentes = outros
+                .filter { it.codigoBarras.isNotBlank() }
+                .associate { it.codigoBarras to it.nome },
+        )
         if (!validacao.valido) {
             aoTerminar(ResultadoAcao.Bloqueado(validacao.faltantes.map { it.mensagem }))
             return
@@ -92,6 +103,8 @@ class EstoqueViewModel(private val repositorio: EstoqueRepositorio) : ViewModel(
             estoqueMaximo = Quantidade.deTexto(rascunho.estoqueMaximo)!!,
             localPadrao = rascunho.localPadrao!!,
             observacoes = rascunho.observacoes.trim(),
+            codigoBarras = rascunho.codigoBarras.trim(),
+            foto = rascunho.foto,
         )
         viewModelScope.launch {
             repositorio.salvarProduto(produto)
@@ -127,6 +140,7 @@ class EstoqueViewModel(private val repositorio: EstoqueRepositorio) : ViewModel(
             localizacao = rascunho.localizacao!!,
             agora = agora(),
             observacao = rascunho.observacoes.trim(),
+            fotoEtiqueta = rascunho.fotoEtiqueta,
             gerarId = ::novoId,
         )
 
@@ -149,6 +163,108 @@ class EstoqueViewModel(private val repositorio: EstoqueRepositorio) : ViewModel(
                     ),
                 )
             }
+        }
+    }
+
+    // ------------------------------------------------------------------- camera
+
+    /**
+     * Acha o produto por codigo de barras lido na embalagem, caindo para o codigo interno quando a
+     * loja usa etiqueta propria.
+     */
+    fun produtoPorCodigoDeBarras(codigo: String): Produto? {
+        val limpo = codigo.trim()
+        if (limpo.isBlank()) return null
+        val atual = estado.value
+        return atual.produtos.firstOrNull { it.codigoBarras.equals(limpo, ignoreCase = true) }
+            ?: atual.produtos.firstOrNull { it.codigo.equals(limpo, ignoreCase = true) }
+    }
+
+    /** Liga um codigo de barras lido a um produto ja cadastrado, sem mexer no resto do cadastro. */
+    fun associarCodigoDeBarras(produtoCodigo: String, codigoBarras: String, aoTerminar: (ResultadoAcao) -> Unit) {
+        val atual = estado.value
+        val produto = atual.produto(produtoCodigo) ?: run {
+            aoTerminar(ResultadoAcao.Bloqueado(listOf("Produto nao encontrado")))
+            return
+        }
+        val dono = atual.produtos.firstOrNull {
+            it.codigo != produto.codigo && it.codigoBarras.equals(codigoBarras.trim(), ignoreCase = true)
+        }
+        if (dono != null) {
+            aoTerminar(ResultadoAcao.Conflito("Este codigo de barras ja e do produto ${dono.nome}."))
+            return
+        }
+        viewModelScope.launch {
+            repositorio.salvarProduto(produto.copy(codigoBarras = codigoBarras.trim()))
+            aoTerminar(ResultadoAcao.Sucesso("Codigo de barras ligado a ${produto.nome}."))
+        }
+    }
+
+    /** Guarda o nome do arquivo da foto no cadastro do produto. */
+    fun salvarFotoDoProduto(produtoCodigo: String, foto: String, aoTerminar: (ResultadoAcao) -> Unit) {
+        val produto = estado.value.produto(produtoCodigo) ?: run {
+            aoTerminar(ResultadoAcao.Bloqueado(listOf("Produto nao encontrado")))
+            return
+        }
+        viewModelScope.launch {
+            repositorio.salvarProduto(produto.copy(foto = foto))
+            aoTerminar(ResultadoAcao.Sucesso("Foto guardada."))
+        }
+    }
+
+    /**
+     * Grava uma fila de entradas revisadas, uma a uma, relendo o estoque entre elas: duas caixas
+     * do mesmo lote na mesma rajada precisam somar, nao conflitar.
+     */
+    fun registrarEntradasEmFila(
+        rascunhos: List<RascunhoEntrada>,
+        aoTerminar: (gravadas: Int, problemas: List<String>) -> Unit,
+    ) {
+        viewModelScope.launch {
+            var gravadas = 0
+            val problemas = mutableListOf<String>()
+
+            rascunhos.forEachIndexed { indice, rascunho ->
+                val atual = repositorio.estado.first()
+                val validacao = rascunho.validar(hoje())
+                val produto = atual.produto(rascunho.produtoCodigo)
+                val quantidade = Quantidade.deTexto(rascunho.quantidade)
+
+                when {
+                    !validacao.valido ->
+                        problemas += "Item ${indice + 1}: ${validacao.resumoDoQueFalta}"
+
+                    produto == null ->
+                        problemas += "Item ${indice + 1}: produto nao encontrado"
+
+                    else -> {
+                        val resultado = Operacoes.entrada(
+                            produto = produto,
+                            lotesDoProduto = atual.lotesDoProduto(produto.codigo),
+                            codigoLote = rascunho.codigoLote.trim(),
+                            validade = rascunho.validade!!,
+                            quantidade = quantidade!!,
+                            localizacao = rascunho.localizacao!!,
+                            agora = agora(),
+                            observacao = rascunho.observacoes.trim(),
+                            fotoEtiqueta = rascunho.fotoEtiqueta,
+                            gerarId = ::novoId,
+                        )
+                        when (resultado) {
+                            is ResultadoEntrada.ConflitoDeValidade ->
+                                problemas += "Item ${indice + 1}: o lote ${rascunho.codigoLote} ja existe " +
+                                    "com validade ${formatarData(resultado.loteExistente.validade)}"
+
+                            is ResultadoEntrada.Sucesso -> {
+                                repositorio.aplicar(resultado.resultado)
+                                gravadas++
+                            }
+                        }
+                    }
+                }
+            }
+
+            aoTerminar(gravadas, problemas)
         }
     }
 

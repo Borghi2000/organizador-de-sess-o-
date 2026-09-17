@@ -56,6 +56,7 @@ object Operacoes {
         localizacao: Localizacao,
         agora: LocalDateTime,
         observacao: String = "",
+        fotoEtiqueta: String = "",
         gerarId: () -> String,
     ): ResultadoEntrada {
         val existente = lotesDoProduto.firstOrNull {
@@ -74,7 +75,11 @@ object Operacoes {
             observacoes = observacao,
         )
         val atualizado = base
-            .copy(quantidadeRecebida = base.quantidadeRecebida + quantidade)
+            .copy(
+                quantidadeRecebida = base.quantidadeRecebida + quantidade,
+                // Nao sobrescreve a foto de uma entrada anterior do mesmo lote.
+                fotoEtiqueta = base.fotoEtiqueta.ifBlank { fotoEtiqueta },
+            )
             .comVariacao(localizacao, quantidade)
         val movimentacao = Movimentacao(
             id = gerarId(),

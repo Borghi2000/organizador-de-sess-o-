@@ -28,6 +28,11 @@ import br.com.borghi.estoquechocolate.core.regras.Contagens
 import br.com.borghi.estoquechocolate.core.regras.LinhaConfirmacao
 import br.com.borghi.estoquechocolate.core.regras.Pvps
 import br.com.borghi.estoquechocolate.core.regras.RascunhoContagem
+import br.com.borghi.estoquechocolate.camera.LeitorDeEtiqueta
+import br.com.borghi.estoquechocolate.core.leitura.CampoEtiqueta
+import br.com.borghi.estoquechocolate.core.leitura.EtiquetaLida
+import br.com.borghi.estoquechocolate.core.leitura.GuardasDeLeitura
+import br.com.borghi.estoquechocolate.core.leitura.InterpretadorDeEtiqueta
 import br.com.borghi.estoquechocolate.core.regras.RascunhoEntrada
 import br.com.borghi.estoquechocolate.core.regras.RascunhoMovimentacao
 import br.com.borghi.estoquechocolate.dados.EstadoDoEstoque
@@ -60,6 +65,10 @@ fun RegistrarEntradaTela(vm: EstoqueViewModel, estado: EstadoDoEstoque, voltar: 
     var confirmando by remember { mutableStateOf(false) }
     var conflito by remember { mutableStateOf<String?>(null) }
     var erros by remember { mutableStateOf<List<String>>(emptyList()) }
+    var lendoEtiqueta by remember { mutableStateOf(false) }
+    var fotoEtiqueta by remember { mutableStateOf("") }
+    var leitura by remember { mutableStateOf<EtiquetaLida?>(null) }
+    var avisosDaLeitura by remember { mutableStateOf<List<String>>(emptyList()) }
 
     val rascunho = RascunhoEntrada(
         produtoCodigo = produto?.codigo ?: "",
@@ -68,12 +77,60 @@ fun RegistrarEntradaTela(vm: EstoqueViewModel, estado: EstadoDoEstoque, voltar: 
         quantidade = quantidade,
         localizacao = local,
         observacoes = observacoes,
+        fotoEtiqueta = fotoEtiqueta,
     )
+
+    if (lendoEtiqueta) {
+        LeitorDeEtiqueta(
+            aoLer = { foto ->
+                val etiqueta = InterpretadorDeEtiqueta.interpretar(foto.texto, hoje)
+                val achado = etiqueta.codigoBarras?.let { vm.produtoPorCodigoDeBarras(it.valor) }
+                if (achado != null) {
+                    produto = achado
+                    if (local == null) local = achado.localPadrao
+                }
+                val alvo = achado ?: produto
+                val guardas = GuardasDeLeitura.conferir(
+                    etiqueta = etiqueta,
+                    lotesDoProduto = alvo?.let { estado.lotesDoProduto(it.codigo) } ?: emptyList(),
+                    hoje = hoje,
+                )
+                val segurados = guardas.filter { it.seguraOPreenchimento }.map { it.campo }.toSet()
+
+                // So preenche o que a leitura sustenta. Campo duvidoso fica em branco, para
+                // aparecer vazio na tela em vez de entrar errado no estoque.
+                etiqueta.lote
+                    ?.takeIf { it.confiavel && CampoEtiqueta.LOTE !in segurados }
+                    ?.let { codigoLote = it.valor }
+                etiqueta.validade
+                    ?.takeIf { it.confiavel && CampoEtiqueta.VALIDADE !in segurados }
+                    ?.let { validadeTexto = formatarData(it.valor) }
+
+                fotoEtiqueta = foto.arquivo
+                leitura = etiqueta
+                avisosDaLeitura = etiqueta.avisos + guardas.map { it.mensagem }
+                lendoEtiqueta = false
+            },
+            aoDigitarNaMao = { lendoEtiqueta = false },
+            aoVoltar = { lendoEtiqueta = false },
+        )
+        return
+    }
     val validacao = rascunho.validar(hoje)
 
     TelaBase("Registrar entrada", aoVoltar = voltar) { padding ->
         ColunaRolavel(padding) {
             Text("Mercadoria que esta chegando na secao.", style = MaterialTheme.typography.bodyMedium)
+
+            Button(onClick = { lendoEtiqueta = true }, modifier = Modifier.fillMaxWidth()) {
+                Text("Ler etiqueta com a camera")
+            }
+            leitura?.let { CartaoDaLeitura(it) }
+            if (avisosDaLeitura.isNotEmpty()) {
+                avisosDaLeitura.forEach {
+                    Text("- $it", style = MaterialTheme.typography.bodySmall)
+                }
+            }
 
             SeletorDeOpcao(
                 rotulo = "Produto",

@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.BottomAppBar
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -43,7 +44,11 @@ fun PainelTela(vm: EstoqueViewModel, estado: EstadoDoEstoque, ir: (Rota) -> Unit
 
     TelaBase(
         titulo = "Estoque e validade",
-        acao = { TextButton(onClick = { ir(Rota.Configuracoes) }) { Text("Ajustes") } },
+        acao = {
+            TextButton(onClick = { ir(Rota.Busca) }) { Text("Buscar") }
+            TextButton(onClick = { ir(Rota.Configuracoes) }) { Text("Ajustes") }
+        },
+        rodape = { BarraDoDiaADia(ir) },
     ) { padding ->
         ColunaRolavel(padding) {
             Text(
@@ -60,7 +65,7 @@ fun PainelTela(vm: EstoqueViewModel, estado: EstadoDoEstoque, ir: (Rota) -> Unit
                             "em Ajustes para experimentar o app antes.",
                         style = MaterialTheme.typography.bodyMedium,
                     )
-                    Button(onClick = { ir(Rota.NovoProduto) }, modifier = Modifier.padding(top = 8.dp)) {
+                    Button(onClick = { ir(Rota.NovoProduto()) }, modifier = Modifier.padding(top = 8.dp)) {
                         Text("Cadastrar primeiro produto")
                     }
                 }
@@ -126,6 +131,9 @@ private fun CartaoDePainel(cartao: CartaoPainel, aoClicar: () -> Unit) {
 @Composable
 private fun GradeDeComandos(ir: (Rota) -> Unit) {
     val comandos = listOf(
+        "O que e isso? (camera)" to Rota.IdentificarProduto,
+        "Conferir com camera" to Rota.ConferenciaComCamera,
+        "Entrada em rajada" to Rota.EntradaEmRajada,
         "Registrar entrada" to Rota.RegistrarEntrada,
         "Registrar contagem" to Rota.RegistrarContagem,
         "Registrar perda" to Rota.RegistrarPerda,
@@ -156,6 +164,33 @@ private fun GradeDeComandos(ir: (Rota) -> Unit) {
                 if (par.size == 1) {
                     androidx.compose.foundation.layout.Spacer(modifier = Modifier.weight(1f))
                 }
+            }
+        }
+    }
+}
+
+/**
+ * Os tres comandos do dia a dia ficam fixos embaixo, na zona do polegar.
+ *
+ * Os nove comandos tem o mesmo peso na grade, mas o uso nao e igual: contagem, reposicao e perda
+ * acontecem todo dia; entrada e dia de entrega; relatorio e semanal. Quem e diario nao deveria
+ * exigir rolagem.
+ */
+@Composable
+private fun BarraDoDiaADia(ir: (Rota) -> Unit) {
+    BottomAppBar(containerColor = MaterialTheme.colorScheme.surfaceVariant) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Button(onClick = { ir(Rota.ConferenciaComCamera) }, modifier = Modifier.weight(1f)) {
+                Text("Contar", style = MaterialTheme.typography.labelLarge)
+            }
+            Button(onClick = { ir(Rota.RegistrarReposicao) }, modifier = Modifier.weight(1f)) {
+                Text("Repor", style = MaterialTheme.typography.labelLarge)
+            }
+            Button(onClick = { ir(Rota.RegistrarPerda) }, modifier = Modifier.weight(1f)) {
+                Text("Perda", style = MaterialTheme.typography.labelLarge)
             }
         }
     }

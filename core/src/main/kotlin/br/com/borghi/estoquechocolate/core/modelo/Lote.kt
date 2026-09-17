@@ -34,6 +34,11 @@ data class Lote(
     val observacoes: String = "",
     val segregado: Boolean = false,
     val motivoSegregacao: MotivoSegregacao? = null,
+    /**
+     * Foto da etiqueta lida na entrada. Seis meses depois, numa divergencia, da para abrir a foto
+     * e conferir a etiqueta original em vez de discutir de memoria.
+     */
+    val fotoEtiqueta: String = "",
 ) {
 
     /** Soma das posicoes. Nao e guardada separadamente, entao nao tem como divergir do detalhe. */

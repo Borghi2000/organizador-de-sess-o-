@@ -35,7 +35,11 @@ sealed interface Rota {
     data object FecharConferencia : Rota
     data object Relatorios : Rota
     data object Produtos : Rota
-    data object NovoProduto : Rota
+    data class NovoProduto(val codigoBarras: String = "") : Rota
+    data object IdentificarProduto : Rota
+    data object ConferenciaComCamera : Rota
+    data object EntradaEmRajada : Rota
+    data object Busca : Rota
     data class DetalheDoLote(val loteId: String) : Rota
     data object Configuracoes : Rota
 }
@@ -64,7 +68,11 @@ fun AplicativoEstoque(vm: EstoqueViewModel) {
             Rota.FecharConferencia -> FecharConferenciaTela(vm, estado, voltar)
             Rota.Relatorios -> RelatoriosTela(vm, voltar)
             Rota.Produtos -> ProdutosTela(vm, estado, voltar, ir)
-            Rota.NovoProduto -> NovoProdutoTela(vm, estado, voltar)
+            is Rota.NovoProduto -> NovoProdutoTela(vm, estado, rota.codigoBarras, voltar)
+            Rota.IdentificarProduto -> IdentificarProdutoTela(vm, estado, voltar, ir)
+            Rota.ConferenciaComCamera -> ConferenciaComCameraTela(vm, estado, voltar)
+            Rota.EntradaEmRajada -> EntradaEmRajadaTela(vm, estado, voltar)
+            Rota.Busca -> BuscaTela(vm, estado, voltar, ir)
             is Rota.DetalheDoLote -> DetalheDoLoteTela(vm, estado, rota.loteId, voltar)
             Rota.Configuracoes -> ConfiguracoesTela(vm, estado, voltar)
         }

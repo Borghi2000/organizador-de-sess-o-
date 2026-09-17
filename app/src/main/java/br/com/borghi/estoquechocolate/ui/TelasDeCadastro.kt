@@ -1,11 +1,14 @@
 package br.com.borghi.estoquechocolate.ui
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -14,8 +17,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import br.com.borghi.estoquechocolate.camera.CapturaDeFoto
+import br.com.borghi.estoquechocolate.camera.Fotos
+import br.com.borghi.estoquechocolate.camera.LeitorDeCodigoDeBarras
 import br.com.borghi.estoquechocolate.core.modelo.Localizacao
 import br.com.borghi.estoquechocolate.core.modelo.MotivoSegregacao
 import br.com.borghi.estoquechocolate.core.modelo.UnidadeMedida
@@ -33,12 +40,12 @@ fun ProdutosTela(vm: EstoqueViewModel, estado: EstadoDoEstoque, voltar: () -> Un
     TelaBase(
         titulo = "Produtos e lotes",
         aoVoltar = voltar,
-        acao = { TextButton(onClick = { ir(Rota.NovoProduto) }) { Text("Novo") } },
+        acao = { TextButton(onClick = { ir(Rota.NovoProduto()) }) { Text("Novo") } },
     ) { padding ->
         ColunaRolavel(padding) {
             if (resumos.isEmpty()) {
                 TextoVazio("Nenhum produto cadastrado.")
-                Button(onClick = { ir(Rota.NovoProduto) }) { Text("Cadastrar produto") }
+                Button(onClick = { ir(Rota.NovoProduto()) }) { Text("Cadastrar produto") }
             }
 
             resumos.sortedBy { it.produto.nome }.forEach { resumo ->
@@ -81,7 +88,12 @@ fun ProdutosTela(vm: EstoqueViewModel, estado: EstadoDoEstoque, voltar: () -> Un
 }
 
 @Composable
-fun NovoProdutoTela(vm: EstoqueViewModel, estado: EstadoDoEstoque, voltar: () -> Unit) {
+fun NovoProdutoTela(
+    vm: EstoqueViewModel,
+    estado: EstadoDoEstoque,
+    codigoBarrasInicial: String = "",
+    voltar: () -> Unit,
+) {
     var codigo by remember { mutableStateOf("") }
     var nome by remember { mutableStateOf("") }
     var categoria by remember { mutableStateOf("") }
@@ -92,9 +104,51 @@ fun NovoProdutoTela(vm: EstoqueViewModel, estado: EstadoDoEstoque, voltar: () ->
     var observacoes by remember { mutableStateOf("") }
     var confirmando by remember { mutableStateOf(false) }
     var erros by remember { mutableStateOf<List<String>>(emptyList()) }
+    val contexto = LocalContext.current
+    var codigoBarras by remember { mutableStateOf(codigoBarrasInicial) }
+    var foto by remember { mutableStateOf("") }
+    var lendoCodigo by remember { mutableStateOf(false) }
+    var fotografando by remember { mutableStateOf(false) }
 
-    val rascunho = RascunhoProduto(codigo, nome, categoria, unidade, minimo, maximo, local, observacoes)
-    val validacao = rascunho.validar(estado.produtos.map { it.codigo }.toSet())
+    val rascunho = RascunhoProduto(
+        codigo, nome, categoria, unidade, minimo, maximo, local, observacoes,
+        codigoBarras = codigoBarras,
+        foto = foto,
+    )
+    val validacao = rascunho.validar(
+        codigosExistentes = estado.produtos.map { it.codigo }.toSet(),
+        codigosDeBarrasExistentes = estado.produtos
+            .filter { it.codigoBarras.isNotBlank() }
+            .associate { it.codigoBarras to it.nome },
+    )
+
+    if (lendoCodigo) {
+        LeitorDeCodigoDeBarras(
+            titulo = "Codigo de barras do produto",
+            instrucao = "Aponte para o codigo da embalagem.",
+            aoLer = { lido ->
+                codigoBarras = lido
+                if (codigo.isBlank()) codigo = lido
+                lendoCodigo = false
+            },
+            aoDigitarNaMao = { lendoCodigo = false },
+            aoVoltar = { lendoCodigo = false },
+        )
+        return
+    }
+
+    if (fotografando) {
+        CapturaDeFoto(
+            titulo = "Foto do produto",
+            aoTirar = { arquivo ->
+                if (foto.isNotBlank()) Fotos.apagar(contexto, foto)
+                foto = arquivo
+                fotografando = false
+            },
+            aoVoltar = { fotografando = false },
+        )
+        return
+    }
 
     TelaBase("Novo produto", aoVoltar = voltar) { padding ->
         ColunaRolavel(padding) {
@@ -117,6 +171,21 @@ fun NovoProdutoTela(vm: EstoqueViewModel, estado: EstadoDoEstoque, voltar: () ->
                 textoDe = { it.descricao() },
                 aoSelecionar = { local = it },
             )
+            CampoTexto(
+                "Codigo de barras",
+                codigoBarras,
+                { codigoBarras = it },
+                numerico = true,
+                apoio = "Opcional. E o que a camera usa para achar o produto num toque.",
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                OutlinedButton(onClick = { lendoCodigo = true }, modifier = Modifier.weight(1f)) {
+                    Text("Ler codigo")
+                }
+                OutlinedButton(onClick = { fotografando = true }, modifier = Modifier.weight(1f)) {
+                    Text(if (foto.isBlank()) "Tirar foto" else "Trocar foto")
+                }
+            }
             CampoTexto("Observacoes", observacoes, { observacoes = it }, linhasUnicas = false)
 
             if (erros.isNotEmpty()) BlocoDeErrosPublico(erros)

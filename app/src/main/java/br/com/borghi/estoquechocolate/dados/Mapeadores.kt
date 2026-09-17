@@ -30,6 +30,8 @@ fun ProdutoEntity.paraModelo() = Produto(
     estoqueMaximo = Quantidade(estoqueMaximo),
     localPadrao = local(localPadraoNome, localPadraoTipo),
     observacoes = observacoes,
+    codigoBarras = codigoBarras,
+    foto = foto,
 )
 
 fun Produto.paraEntidade() = ProdutoEntity(
@@ -42,6 +44,8 @@ fun Produto.paraEntidade() = ProdutoEntity(
     localPadraoNome = localPadrao.nome,
     localPadraoTipo = localPadrao.tipo.name,
     observacoes = observacoes,
+    codigoBarras = codigoBarras,
+    foto = foto,
 )
 
 fun LoteComPosicoes.paraModelo() = Lote(
@@ -55,6 +59,7 @@ fun LoteComPosicoes.paraModelo() = Lote(
     observacoes = lote.observacoes,
     segregado = lote.segregado,
     motivoSegregacao = lote.motivoSegregacao?.let { MotivoSegregacao.valueOf(it) },
+    fotoEtiqueta = lote.fotoEtiqueta,
 )
 
 fun Lote.paraEntidade() = LoteEntity(
@@ -67,6 +72,7 @@ fun Lote.paraEntidade() = LoteEntity(
     observacoes = observacoes,
     segregado = segregado,
     motivoSegregacao = motivoSegregacao?.name,
+    fotoEtiqueta = fotoEtiqueta,
 )
 
 fun Lote.posicoesParaEntidade() = posicoes.map {

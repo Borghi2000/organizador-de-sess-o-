@@ -23,6 +23,8 @@ data class ProdutoEntity(
     val localPadraoNome: String,
     val localPadraoTipo: String,
     val observacoes: String,
+    val codigoBarras: String = "",
+    val foto: String = "",
 )
 
 @Entity(
@@ -39,6 +41,7 @@ data class LoteEntity(
     val observacoes: String,
     val segregado: Boolean,
     val motivoSegregacao: String?,
+    val fotoEtiqueta: String = "",
 )
 
 @Entity(

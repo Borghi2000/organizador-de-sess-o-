@@ -12,4 +12,8 @@ data class Produto(
     val estoqueMaximo: Quantidade,
     val localPadrao: Localizacao,
     val observacoes: String = "",
+    /** EAN lido da embalagem. E o que a camera usa para achar o produto num toque. */
+    val codigoBarras: String = "",
+    /** Nome do arquivo da foto, guardado no aparelho. Vazio quando nao ha foto. */
+    val foto: String = "",
 )

@@ -1,5 +1,6 @@
 package br.com.borghi.estoquechocolate.core.regras
 
+import br.com.borghi.estoquechocolate.core.leitura.InterpretadorDeEtiqueta
 import br.com.borghi.estoquechocolate.core.modelo.Localizacao
 import br.com.borghi.estoquechocolate.core.modelo.Quantidade
 import br.com.borghi.estoquechocolate.core.modelo.TipoMovimentacao
@@ -40,8 +41,17 @@ data class RascunhoProduto(
     val estoqueMaximo: String = "",
     val localPadrao: Localizacao? = null,
     val observacoes: String = "",
+    val codigoBarras: String = "",
+    val foto: String = "",
 ) {
-    fun validar(codigosExistentes: Set<String> = emptySet()): ResultadoValidacao {
+    /**
+     * [codigosDeBarrasExistentes] mapeia codigo de barras ja cadastrado para o nome do produto que
+     * o usa, para o app dizer qual e o produto em vez de so recusar.
+     */
+    fun validar(
+        codigosExistentes: Set<String> = emptySet(),
+        codigosDeBarrasExistentes: Map<String, String> = emptyMap(),
+    ): ResultadoValidacao {
         val faltantes = buildList {
             obrigatorio(codigo, "codigo", "Informe o codigo do produto")?.let { add(it) }
             obrigatorio(nome, "nome", "Informe o nome do produto")?.let { add(it) }
@@ -61,8 +71,20 @@ data class RascunhoProduto(
             if (codigo.isNotBlank() && codigo.trim() in codigosExistentes) {
                 add(CampoFaltante("codigo", "Ja existe um produto com o codigo ${codigo.trim()}"))
             }
+            val dono = codigosDeBarrasExistentes[codigoBarras.trim()]
+            if (codigoBarras.isNotBlank() && dono != null) {
+                add(CampoFaltante("codigoBarras", "Este codigo de barras ja e do produto $dono"))
+            }
         }
-        return ResultadoValidacao(faltantes)
+        val avisos = buildList {
+            val barras = codigoBarras.trim()
+            // Nao bloqueia: etiqueta interna de loja nao tem digito verificador valido, e isso e
+            // legitimo. So avisa, porque quase sempre significa leitura torta.
+            if (barras.isNotBlank() && !InterpretadorDeEtiqueta.digitoVerificadorConfere(barras)) {
+                add("O codigo de barras $barras nao passa no digito verificador. Confira se leu certo.")
+            }
+        }
+        return ResultadoValidacao(faltantes, avisos)
     }
 
     fun paraConfirmacao(): List<LinhaConfirmacao> = listOf(
@@ -73,6 +95,8 @@ data class RascunhoProduto(
         LinhaConfirmacao("Estoque minimo", estoqueMinimo),
         LinhaConfirmacao("Estoque maximo", estoqueMaximo),
         LinhaConfirmacao("Local padrao", localPadrao?.descricao() ?: "-"),
+        LinhaConfirmacao("Codigo de barras", codigoBarras.ifBlank { "-" }),
+        LinhaConfirmacao("Foto", if (foto.isBlank()) "sem foto" else "1 foto"),
         LinhaConfirmacao("Observacoes", observacoes.ifBlank { "-" }),
     )
 }
@@ -84,6 +108,8 @@ data class RascunhoEntrada(
     val quantidade: String = "",
     val localizacao: Localizacao? = null,
     val observacoes: String = "",
+    /** Arquivo da foto da etiqueta, quando a entrada veio da camera. */
+    val fotoEtiqueta: String = "",
 ) {
     fun validar(hoje: LocalDate): ResultadoValidacao {
         val quantidadeLida = Quantidade.deTexto(quantidade)
