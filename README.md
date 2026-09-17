@@ -20,6 +20,10 @@ ligar e colar a sua chave (veja [Câmera e leitura automática](#câmera-e-leitu
 Para atualizar depois, baixe o APK novo e instale por cima. **Os dados são preservados**, porque
 todas as versões são assinadas com a mesma chave.
 
+> **O arquivo tem cerca de 75 MB.** A maior parte disso são os modelos de reconhecimento de texto e
+> de código de barras, que ficam **dentro do app** justamente para a câmera funcionar no corredor da
+> loja sem depender de rede. Baixe no wi-fi; depois de instalado, o app não usa internet.
+
 ### Sobre a chave de assinatura
 
 A chave fica em `keystore/` dentro deste repositório, visível para quem tiver acesso a ele. Foi uma
