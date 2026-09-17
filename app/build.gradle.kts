@@ -55,7 +55,15 @@ android {
     }
 
     packaging {
-        resources.excludes += "/META-INF/{AL2.0,LGPL2.1}"
+        // O SDK da IA arrasta jars Apache, e tres deles trazem o mesmo META-INF/DEPENDENCIES.
+        // Sao arquivos de metadado de licenca; o APK so precisa de uma copia.
+        resources.excludes += setOf(
+            "/META-INF/{AL2.0,LGPL2.1}",
+            "/META-INF/DEPENDENCIES",
+            "/META-INF/LICENSE*",
+            "/META-INF/NOTICE*",
+            "/META-INF/INDEX.LIST",
+        )
     }
 }
 
