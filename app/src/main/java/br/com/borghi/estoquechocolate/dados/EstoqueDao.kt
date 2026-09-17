@@ -66,6 +66,15 @@ abstract class EstoqueDao {
     @Query("DELETE FROM posicoes WHERE loteId = :loteId")
     abstract suspend fun apagarPosicoesDoLote(loteId: String)
 
+    @Query("DELETE FROM movimentacoes WHERE id IN (:ids)")
+    abstract suspend fun apagarMovimentacoesPorId(ids: List<String>)
+
+    @Query("DELETE FROM divergencias WHERE id IN (:ids)")
+    abstract suspend fun apagarDivergenciasPorId(ids: List<String>)
+
+    @Query("DELETE FROM itens_conferencia WHERE conferenciaId = :conferenciaId")
+    abstract suspend fun apagarItensDaConferencia(conferenciaId: String)
+
     @Query("DELETE FROM produtos")
     abstract suspend fun apagarProdutos()
 

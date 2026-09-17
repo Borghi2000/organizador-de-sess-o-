@@ -61,6 +61,19 @@ fun coresDa(classificacao: ClassificacaoValidade): CoresDeSeveridade {
     }
 }
 
+/**
+ * Cor nao pode ser o unico sinal: vermelho, laranja e amarelo somem sob a luz forte da loja e nao
+ * significam nada para quem tem daltonismo. Cada faixa carrega tambem um simbolo.
+ */
+fun simboloDa(classificacao: ClassificacaoValidade): String = when (classificacao) {
+    ClassificacaoValidade.VENCIDO -> "X"
+    ClassificacaoValidade.CRITICO -> "!!"
+    ClassificacaoValidade.URGENTE -> "!"
+    ClassificacaoValidade.ATENCAO -> "~"
+    ClassificacaoValidade.MONITORAR -> "-"
+    ClassificacaoValidade.NORMAL -> "OK"
+}
+
 @Composable
 fun TemaEstoque(conteudo: @Composable () -> Unit) {
     MaterialTheme(

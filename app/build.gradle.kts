@@ -98,4 +98,8 @@ dependencies {
 
     // So para o aviso diario de manha.
     implementation(libs.androidx.work.runtime)
+
+    // Camada 2 do reconhecimento, opcional e desligada por padrao: so e usada se voce ligar a
+    // ajuda por IA em Ajustes e colar sua propria chave.
+    implementation(libs.anthropic.java)
 }

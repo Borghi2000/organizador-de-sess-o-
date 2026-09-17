@@ -12,6 +12,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -19,10 +20,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import br.com.borghi.estoquechocolate.aviso.AvisoDaManhaWorker
+import br.com.borghi.estoquechocolate.aviso.Preferencias
 import br.com.borghi.estoquechocolate.core.modelo.TipoLocal
 import br.com.borghi.estoquechocolate.core.relatorio.Relatorio
 import br.com.borghi.estoquechocolate.dados.EstadoDoEstoque
@@ -95,6 +99,18 @@ fun ConfiguracoesTela(vm: EstoqueViewModel, estado: EstadoDoEstoque, voltar: () 
     var confirmandoExemplo by remember { mutableStateOf(false) }
     var erros by remember { mutableStateOf<List<String>>(emptyList()) }
 
+    val preferencias = remember { Preferencias(contexto) }
+    var avisoLigado by remember { mutableStateOf(preferencias.avisoDiarioLigado) }
+    var horaDoAviso by remember { mutableStateOf(preferencias.horaDoAviso.toString()) }
+    var iaLigada by remember { mutableStateOf(preferencias.ajudaPorIaLigada) }
+    var chaveDaIa by remember { mutableStateOf(preferencias.chaveDaIa) }
+
+    val pedirNotificacao = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { autorizou ->
+        if (!autorizou) vm.avisar("Sem permissao de notificacao o aviso nao aparece.")
+    }
+
     fun tratar(resultado: ResultadoAcao) {
         when (resultado) {
             is ResultadoAcao.Sucesso -> {
@@ -146,6 +162,106 @@ fun ConfiguracoesTela(vm: EstoqueViewModel, estado: EstadoDoEstoque, voltar: () 
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Text("Salvar prazo")
+            }
+
+            Text(
+                "Aviso da manha",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(top = 12.dp),
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text("Me avisar todo dia sobre o que esta pendente")
+                Switch(
+                    checked = avisoLigado,
+                    onCheckedChange = { ligado ->
+                        avisoLigado = ligado
+                        preferencias.avisoDiarioLigado = ligado
+                        if (ligado) {
+                            if (android.os.Build.VERSION.SDK_INT >= 33) {
+                                pedirNotificacao.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                            }
+                            AvisoDaManhaWorker.agendar(contexto, preferencias.horaDoAviso)
+                            vm.avisar("Aviso ligado para as ${preferencias.horaDoAviso}h.")
+                        } else {
+                            AvisoDaManhaWorker.cancelar(contexto)
+                        }
+                    },
+                )
+            }
+            if (avisoLigado) {
+                CampoTexto(
+                    "Hora do aviso",
+                    horaDoAviso,
+                    { horaDoAviso = it },
+                    numerico = true,
+                    apoio = "Hora cheia, de 0 a 23. O aviso so aparece se houver pendencia.",
+                )
+                Button(
+                    onClick = {
+                        val hora = horaDoAviso.toIntOrNull()?.coerceIn(0, 23) ?: 8
+                        preferencias.horaDoAviso = hora
+                        horaDoAviso = hora.toString()
+                        AvisoDaManhaWorker.agendar(contexto, hora)
+                        vm.avisar("Aviso ajustado para as ${hora}h.")
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("Salvar hora do aviso") }
+            }
+
+            Text(
+                "Ajuda por IA (opcional)",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(top = 12.dp),
+            )
+            Text(
+                "O app le etiqueta e codigo de barras sozinho, no aparelho, sem internet. A IA so " +
+                    "entra quando essa leitura falha — e so se voce ligar aqui e colar sua chave. " +
+                    "A chave fica guardada so neste aparelho: nao vai para o backup nem para o " +
+                    "repositorio, e nao esta dentro do APK.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text("Usar IA quando a leitura falhar")
+                Switch(
+                    checked = iaLigada,
+                    onCheckedChange = {
+                        iaLigada = it
+                        preferencias.ajudaPorIaLigada = it
+                    },
+                )
+            }
+            CampoTexto(
+                "Chave da API",
+                chaveDaIa,
+                { chaveDaIa = it },
+                apoio = "Colada uma vez. Fica so neste aparelho.",
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                Button(
+                    onClick = {
+                        preferencias.chaveDaIa = chaveDaIa
+                        vm.avisar(if (chaveDaIa.isBlank()) "Chave apagada." else "Chave guardada neste aparelho.")
+                    },
+                    modifier = Modifier.weight(1f),
+                ) { Text("Salvar chave") }
+                OutlinedButton(
+                    onClick = {
+                        chaveDaIa = ""
+                        preferencias.chaveDaIa = ""
+                        vm.avisar("Chave apagada deste aparelho.")
+                    },
+                    modifier = Modifier.weight(1f),
+                ) { Text("Apagar chave") }
             }
 
             Text(

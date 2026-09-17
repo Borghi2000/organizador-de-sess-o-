@@ -246,7 +246,7 @@ fun DetalheDoLoteTela(vm: EstoqueViewModel, estado: EstadoDoEstoque, loteId: Str
         ColunaRolavel(padding) {
             CartaoSimples {
                 Text(produto.nome, fontWeight = FontWeight.SemiBold)
-                Etiqueta(classificacao.rotulo, cores.fundo, cores.texto)
+                Etiqueta("${simboloDa(classificacao)} ${classificacao.rotulo}", cores.fundo, cores.texto)
                 Text("Validade ${formatarData(lote.validade)} - ${ClassificacaoValidade.descreverPrazo(lote.validade, hoje)}")
                 Text("Recebido: ${lote.quantidadeRecebida.formatar(produto.unidade)}")
                 Text("Atual: ${lote.quantidadeAtual.formatar(produto.unidade)}", fontWeight = FontWeight.SemiBold)

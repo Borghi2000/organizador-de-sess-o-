@@ -122,7 +122,27 @@ class EstoqueRepositorio(private val dao: EstoqueDao) {
 
     suspend fun salvarConferencia(conferencia: Conferencia) {
         dao.salvarConferencia(conferencia.paraEntidade())
+        dao.apagarItensDaConferencia(conferencia.id)
         dao.salvarItensConferencia(conferencia.itensParaEntidade())
+    }
+
+    /**
+     * Volta o estoque ao estado anterior a uma operacao: repoe os lotes como estavam e apaga as
+     * movimentacoes e divergencias que aquela operacao criou.
+     *
+     * So e usada pelo "desfazer" das acoes repetitivas, dentro da janela de segundos em que ainda
+     * da para dizer que foi engano.
+     */
+    suspend fun desfazer(
+        lotesAnteriores: List<Lote>,
+        movimentacoes: List<String>,
+        divergencias: List<String>,
+        conferenciaAnterior: Conferencia?,
+    ) {
+        if (lotesAnteriores.isNotEmpty()) salvarLotes(lotesAnteriores)
+        if (movimentacoes.isNotEmpty()) dao.apagarMovimentacoesPorId(movimentacoes)
+        if (divergencias.isNotEmpty()) dao.apagarDivergenciasPorId(divergencias)
+        conferenciaAnterior?.let { salvarConferencia(it) }
     }
 
     suspend fun estaVazio(): Boolean = dao.contarProdutos() == 0

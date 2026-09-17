@@ -1,11 +1,15 @@
 package br.com.borghi.estoquechocolate.ui
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -13,6 +17,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -28,7 +33,13 @@ import br.com.borghi.estoquechocolate.core.regras.Contagens
 import br.com.borghi.estoquechocolate.core.regras.LinhaConfirmacao
 import br.com.borghi.estoquechocolate.core.regras.Pvps
 import br.com.borghi.estoquechocolate.core.regras.RascunhoContagem
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.platform.LocalContext
+import br.com.borghi.estoquechocolate.aviso.Preferencias
 import br.com.borghi.estoquechocolate.camera.LeitorDeEtiqueta
+import br.com.borghi.estoquechocolate.ia.AjudaPorIa
+import br.com.borghi.estoquechocolate.ia.SugestaoDaIa
+import kotlinx.coroutines.launch
 import br.com.borghi.estoquechocolate.core.leitura.CampoEtiqueta
 import br.com.borghi.estoquechocolate.core.leitura.EtiquetaLida
 import br.com.borghi.estoquechocolate.core.leitura.GuardasDeLeitura
@@ -66,6 +77,12 @@ fun RegistrarEntradaTela(vm: EstoqueViewModel, estado: EstadoDoEstoque, voltar: 
     var conflito by remember { mutableStateOf<String?>(null) }
     var erros by remember { mutableStateOf<List<String>>(emptyList()) }
     var lendoEtiqueta by remember { mutableStateOf(false) }
+    val contexto = LocalContext.current
+    val preferencias = remember { Preferencias(contexto) }
+    val ajudaPorIa = remember { AjudaPorIa(preferencias) }
+    val escopo = rememberCoroutineScope()
+    var sugestao by remember { mutableStateOf<SugestaoDaIa?>(null) }
+    var consultandoIa by remember { mutableStateOf(false) }
     var fotoEtiqueta by remember { mutableStateOf("") }
     var leitura by remember { mutableStateOf<EtiquetaLida?>(null) }
     var avisosDaLeitura by remember { mutableStateOf<List<String>>(emptyList()) }
@@ -126,6 +143,37 @@ fun RegistrarEntradaTela(vm: EstoqueViewModel, estado: EstadoDoEstoque, voltar: 
                 Text("Ler etiqueta com a camera")
             }
             leitura?.let { CartaoDaLeitura(it) }
+
+            // A IA e reforco, nao fundacao: so aparece quando a leitura offline nao resolveu, e
+            // so se voce tiver ligado a ajuda em Ajustes com a sua chave.
+            val leituraAtual = leitura
+            if (leituraAtual != null && leituraAtual.precisaDeAjuda && ajudaPorIa.disponivel) {
+                OutlinedButton(
+                    enabled = !consultandoIa,
+                    onClick = {
+                        consultandoIa = true
+                        escopo.launch {
+                            ajudaPorIa.completar(leituraAtual, hoje)
+                                .onSuccess { resposta ->
+                                    sugestao = resposta
+                                    if (resposta.vazia) vm.avisar("A IA tambem nao conseguiu deduzir.")
+                                }
+                                .onFailure { vm.avisar("Nao consegui consultar a IA: ${it.message}") }
+                            consultandoIa = false
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text(if (consultandoIa) "Consultando..." else "Pedir ajuda da IA para o que faltou") }
+            }
+
+            sugestao?.let { proposta ->
+                CartaoDaSugestao(
+                    proposta = proposta,
+                    aoUsarValidade = { validadeTexto = formatarData(it) },
+                    aoUsarLote = { codigoLote = it },
+                    aoDescartar = { sugestao = null },
+                )
+            }
             if (avisosDaLeitura.isNotEmpty()) {
                 avisosDaLeitura.forEach {
                     Text("- $it", style = MaterialTheme.typography.bodySmall)
@@ -640,5 +688,51 @@ fun FecharConferenciaTela(vm: EstoqueViewModel, estado: EstadoDoEstoque, voltar:
             },
             aoCancelar = { confirmando = false },
         )
+    }
+}
+
+/**
+ * A IA propoe, voce confirma. Cada campo vem com um botao proprio: nada e aplicado em bloco, e o
+ * que voce nao aceitar simplesmente nao entra.
+ */
+@Composable
+private fun CartaoDaSugestao(
+    proposta: SugestaoDaIa,
+    aoUsarValidade: (java.time.LocalDate) -> Unit,
+    aoUsarLote: (String) -> Unit,
+    aoDescartar: () -> Unit,
+) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(14.dp)) {
+            Text("Sugestao da IA", fontWeight = FontWeight.Bold)
+            if (proposta.explicacao.isNotBlank()) {
+                Text(proposta.explicacao, style = MaterialTheme.typography.bodySmall)
+            }
+            proposta.validade?.let { data ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text("Validade: ${formatarData(data)}")
+                    TextButton(onClick = { aoUsarValidade(data) }) { Text("Usar") }
+                }
+            }
+            proposta.codigoLote?.let { lote ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text("Lote: $lote")
+                    TextButton(onClick = { aoUsarLote(lote) }) { Text("Usar") }
+                }
+            }
+            proposta.nome?.let { Text("Produto: $it", style = MaterialTheme.typography.bodySmall) }
+            proposta.marca?.let { Text("Marca: $it", style = MaterialTheme.typography.bodySmall) }
+            proposta.peso?.let { Text("Peso: $it", style = MaterialTheme.typography.bodySmall) }
+            proposta.categoria?.let { Text("Categoria: $it", style = MaterialTheme.typography.bodySmall) }
+            TextButton(onClick = aoDescartar) { Text("Descartar sugestao") }
+        }
     }
 }

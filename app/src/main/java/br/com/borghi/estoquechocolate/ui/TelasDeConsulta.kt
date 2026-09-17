@@ -5,8 +5,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -17,12 +19,20 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import br.com.borghi.estoquechocolate.core.modelo.MotivoSegregacao
 import br.com.borghi.estoquechocolate.core.painel.MontadorPainel
 import br.com.borghi.estoquechocolate.core.painel.TipoCartao
 import br.com.borghi.estoquechocolate.core.regras.ClassificacaoValidade
 import br.com.borghi.estoquechocolate.core.regras.Estoque
 import br.com.borghi.estoquechocolate.core.regras.Pvps
 import br.com.borghi.estoquechocolate.dados.EstadoDoEstoque
+
+/** Cartoes cujos itens sao lotes com acao imediata possivel. */
+private val TIPOS_COM_ACAO_DIRETA = setOf(
+    TipoCartao.VENCIDOS,
+    TipoCartao.VENCE_EM_7_DIAS,
+    TipoCartao.VENCE_EM_8_A_15_DIAS,
+)
 
 @Composable
 fun ListaDeCartaoTela(
@@ -36,6 +46,41 @@ fun ListaDeCartaoTela(
         estado.produtos, estado.lotes, estado.movimentacoes, estado.divergencias, vm.hoje(), estado.configuracao,
     )
     val cartao = painel.cartao(tipo)
+    var loteParaSegregar by remember { mutableStateOf<String?>(null) }
+
+    loteParaSegregar?.let { id ->
+        val lote = estado.lote(id)
+        AlertDialog(
+            onDismissRequest = { loteParaSegregar = null },
+            title = { Text("Segregar lote ${lote?.codigoLote ?: ""}") },
+            text = {
+                Text(
+                    "Isso registra que o produto saiu da area de venda e foi para a area de " +
+                        "segregacao. A quantidade continua no estoque, so muda de lugar.",
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val motivo = if (lote != null && lote.estaVencido(vm.hoje())) {
+                        MotivoSegregacao.VENCIDO
+                    } else {
+                        MotivoSegregacao.AVARIA
+                    }
+                    vm.segregarLote(id, motivo, "Segregado pelo painel") { resultado ->
+                        when (resultado) {
+                            is ResultadoAcao.Sucesso -> vm.avisar(resultado.textoCompleto())
+                            is ResultadoAcao.Bloqueado -> vm.avisar(resultado.faltantes.joinToString("; "))
+                            is ResultadoAcao.Conflito -> vm.avisar(resultado.mensagem)
+                        }
+                    }
+                    loteParaSegregar = null
+                }) { Text("Segregar agora") }
+            },
+            dismissButton = {
+                TextButton(onClick = { loteParaSegregar = null }) { Text("Cancelar") }
+            },
+        )
+    }
 
     TelaBase(tipo.titulo, aoVoltar = voltar) { padding ->
         ColunaRolavel(padding) {
@@ -49,6 +94,27 @@ fun ListaDeCartaoTela(
                     CartaoSimples(aoClicar = item.loteId?.let { id -> { ir(Rota.DetalheDoLote(id)) } }) {
                         Text(item.titulo, fontWeight = FontWeight.SemiBold)
                         Text(item.detalhe, style = MaterialTheme.typography.bodyMedium)
+
+                        // O painel mostrava o problema e parava ali. Aqui a solucao fica a um
+                        // toque de distancia do aviso, que e onde ela deveria estar.
+                        val lote = item.loteId?.let { estado.lote(it) }
+                        if (lote != null && tipo in TIPOS_COM_ACAO_DIRETA) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                if (!lote.segregado) {
+                                    OutlinedButton(
+                                        onClick = { loteParaSegregar = lote.id },
+                                        modifier = Modifier.weight(1f),
+                                    ) { Text("Segregar") }
+                                }
+                                OutlinedButton(
+                                    onClick = { ir(Rota.DetalheDoLote(lote.id)) },
+                                    modifier = Modifier.weight(1f),
+                                ) { Text("Registrar perda") }
+                            }
+                        }
                     }
                 }
             }
@@ -82,7 +148,7 @@ fun VencimentosTela(vm: EstoqueViewModel, estado: EstadoDoEstoque, voltar: () ->
                     modifier = Modifier.padding(top = 8.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    Etiqueta("${classificacao.rotulo} (${lotes.size})", cores.fundo, cores.texto)
+                    Etiqueta("${simboloDa(classificacao)} ${classificacao.rotulo} (${lotes.size})", cores.fundo, cores.texto)
                 }
                 Text(classificacao.descricao, style = MaterialTheme.typography.bodySmall)
 

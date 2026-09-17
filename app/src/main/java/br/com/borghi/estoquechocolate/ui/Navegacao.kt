@@ -2,6 +2,7 @@ package br.com.borghi.estoquechocolate.ui
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -88,10 +89,14 @@ fun AplicativoEstoque(vm: EstoqueViewModel) {
 @Composable
 private fun BannerDeMensagem(vm: EstoqueViewModel, modifier: Modifier = Modifier) {
     val mensagem = vm.mensagem ?: return
+    val desfazer = vm.desfazerDisponivel
 
-    LaunchedEffect(mensagem) {
-        delay(6_000)
+    // Enquanto da para desfazer, o aviso fica de pe mais tempo: 30 segundos e o que separa
+    // "foi engano" de "agora e ajuste de inventario".
+    LaunchedEffect(mensagem, desfazer) {
+        delay(if (desfazer != null) 30_000 else 6_000)
         vm.limparMensagem()
+        vm.esquecerDesfazer()
     }
 
     Card(
@@ -104,8 +109,28 @@ private fun BannerDeMensagem(vm: EstoqueViewModel, modifier: Modifier = Modifier
         ),
     ) {
         Text(mensagem, modifier = Modifier.padding(start = 14.dp, top = 12.dp, end = 14.dp))
-        TextButton(onClick = { vm.limparMensagem() }, modifier = Modifier.padding(horizontal = 6.dp)) {
-            Text("Fechar", color = MaterialTheme.colorScheme.inverseOnSurface)
+        Row(modifier = Modifier.padding(horizontal = 6.dp)) {
+            if (desfazer != null) {
+                TextButton(onClick = {
+                    vm.desfazerUltima { resultado ->
+                        vm.avisar(
+                            when (resultado) {
+                                is ResultadoAcao.Sucesso -> resultado.mensagem
+                                is ResultadoAcao.Bloqueado -> resultado.faltantes.joinToString("; ")
+                                is ResultadoAcao.Conflito -> resultado.mensagem
+                            }
+                        )
+                    }
+                }) {
+                    Text("Desfazer", color = MaterialTheme.colorScheme.inverseOnSurface)
+                }
+            }
+            TextButton(onClick = {
+                vm.limparMensagem()
+                vm.esquecerDesfazer()
+            }) {
+                Text("Fechar", color = MaterialTheme.colorScheme.inverseOnSurface)
+            }
         }
     }
 }

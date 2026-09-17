@@ -55,6 +55,56 @@ class EstoqueViewModel(private val repositorio: EstoqueRepositorio) : ViewModel(
     /** Conferencia do dia mantida em memoria para contagens seguidas nao se perderem. */
     private var conferenciaAberta: Conferencia? = null
 
+    /**
+     * A ultima acao repetitiva, guardada para poder ser desfeita.
+     *
+     * Para acao rara e grave — entrada, perda, ajuste, limpar tudo — a confirmacao antes vale a
+     * pena. Para acao repetitiva — contagem, reposicao — o dialogo vira obstaculo que se aprende a
+     * apertar no automatico, e ai ele nao protege mais nada. Nessas, desfazer protege mais.
+     */
+    private var ultimaAcao: AcaoDesfazivel? = null
+
+    /** Descricao do que da para desfazer agora, ou null quando nao ha nada. */
+    var desfazerDisponivel by mutableStateOf<String?>(null)
+        private set
+
+    private data class AcaoDesfazivel(
+        val descricao: String,
+        val lotesAnteriores: List<br.com.borghi.estoquechocolate.core.modelo.Lote> = emptyList(),
+        val movimentacoes: List<String> = emptyList(),
+        val divergencias: List<String> = emptyList(),
+        val conferenciaAnterior: Conferencia? = null,
+        val conferenciaEmMemoria: Conferencia? = null,
+    )
+
+    private fun guardarParaDesfazer(acao: AcaoDesfazivel) {
+        ultimaAcao = acao
+        desfazerDisponivel = acao.descricao
+    }
+
+    fun esquecerDesfazer() {
+        ultimaAcao = null
+        desfazerDisponivel = null
+    }
+
+    fun desfazerUltima(aoTerminar: (ResultadoAcao) -> Unit) {
+        val acao = ultimaAcao ?: run {
+            aoTerminar(ResultadoAcao.Bloqueado(listOf("Nao ha nada para desfazer")))
+            return
+        }
+        viewModelScope.launch {
+            repositorio.desfazer(
+                lotesAnteriores = acao.lotesAnteriores,
+                movimentacoes = acao.movimentacoes,
+                divergencias = acao.divergencias,
+                conferenciaAnterior = acao.conferenciaAnterior,
+            )
+            conferenciaAberta = acao.conferenciaEmMemoria
+            esquecerDesfazer()
+            aoTerminar(ResultadoAcao.Sucesso("Desfeito: ${acao.descricao}."))
+        }
+    }
+
     init {
         viewModelScope.launch { repositorio.garantirLocaisPadrao() }
     }
@@ -297,7 +347,12 @@ class EstoqueViewModel(private val repositorio: EstoqueRepositorio) : ViewModel(
             observacao = observacao.trim(),
             gerarId = ::novoId,
         )
-        aplicarEResponder(resultado, "Reposicao registrada.", aoTerminar)
+        aplicarEResponder(
+            resultado,
+            "Reposicao registrada.",
+            desfazivel = "reposicao",
+            aoTerminar = aoTerminar,
+        )
     }
 
     fun registrarBaixa(
@@ -325,7 +380,7 @@ class EstoqueViewModel(private val repositorio: EstoqueRepositorio) : ViewModel(
             observacao = rascunho.observacao.trim(),
             gerarId = ::novoId,
         )
-        aplicarEResponder(resultado, "${tipo.rotulo} registrada.", aoTerminar)
+        aplicarEResponder(resultado, "${tipo.rotulo} registrada.", aoTerminar = aoTerminar)
     }
 
     fun registrarSaida(
@@ -347,7 +402,7 @@ class EstoqueViewModel(private val repositorio: EstoqueRepositorio) : ViewModel(
             observacao = observacao.trim(),
             gerarId = ::novoId,
         )
-        aplicarEResponder(resultado, "Saida registrada.", aoTerminar)
+        aplicarEResponder(resultado, "Saida registrada.", aoTerminar = aoTerminar)
     }
 
     fun registrarTransferencia(
@@ -384,7 +439,7 @@ class EstoqueViewModel(private val repositorio: EstoqueRepositorio) : ViewModel(
             observacao = observacao.trim(),
             gerarId = ::novoId,
         )
-        aplicarEResponder(resultado, "Transferencia registrada.", aoTerminar)
+        aplicarEResponder(resultado, "Transferencia registrada.", aoTerminar = aoTerminar)
     }
 
     fun segregarLote(loteId: String, motivo: MotivoSegregacao, observacao: String, aoTerminar: (ResultadoAcao) -> Unit) {
@@ -406,13 +461,14 @@ class EstoqueViewModel(private val repositorio: EstoqueRepositorio) : ViewModel(
         aplicarEResponder(
             resultado,
             "Lote ${lote.codigoLote} segregado e retirado da venda.",
-            aoTerminar,
+            aoTerminar = aoTerminar,
         )
     }
 
     private fun aplicarEResponder(
         resultado: ResultadoOperacao,
         mensagemSucesso: String,
+        desfazivel: String? = null,
         aoTerminar: (ResultadoAcao) -> Unit,
     ) {
         if (resultado.movimentacoes.isEmpty()) {
@@ -423,8 +479,21 @@ class EstoqueViewModel(private val repositorio: EstoqueRepositorio) : ViewModel(
             )
             return
         }
+        val anteriores = resultado.lotesAtualizados.mapNotNull { estado.value.lote(it.id) }
         viewModelScope.launch {
             repositorio.aplicar(resultado)
+            if (desfazivel != null && anteriores.size == resultado.lotesAtualizados.size) {
+                guardarParaDesfazer(
+                    AcaoDesfazivel(
+                        descricao = desfazivel,
+                        lotesAnteriores = anteriores,
+                        movimentacoes = resultado.movimentacoes.map { it.id },
+                        divergencias = resultado.divergenciasAtualizadas.map { it.id },
+                    ),
+                )
+            } else {
+                esquecerDesfazer()
+            }
             aoTerminar(ResultadoAcao.Sucesso(mensagemSucesso, resultado.avisos))
         }
     }
@@ -454,11 +523,20 @@ class EstoqueViewModel(private val repositorio: EstoqueRepositorio) : ViewModel(
             .filterNot { it.loteId == contagem.item.loteId && it.localizacao == contagem.item.localizacao } +
             contagem.item
         val atualizada = conferencia.copy(itens = itens)
+        val conferenciaDeAntes = conferenciaAberta
         conferenciaAberta = atualizada
 
         viewModelScope.launch {
             repositorio.salvarConferencia(atualizada)
             contagem.divergencia?.let { repositorio.salvarDivergencias(listOf(it)) }
+            guardarParaDesfazer(
+                AcaoDesfazivel(
+                    descricao = "contagem do lote ${lote.codigoLote}",
+                    divergencias = listOfNotNull(contagem.divergencia?.id),
+                    conferenciaAnterior = conferenciaDeAntes ?: conferencia,
+                    conferenciaEmMemoria = conferenciaDeAntes,
+                ),
+            )
             val unidade = unidadeDe(lote.produtoCodigo)
             aoTerminar(
                 if (contagem.bateu) {

@@ -109,12 +109,16 @@ fun PainelTela(vm: EstoqueViewModel, estado: EstadoDoEstoque, ir: (Rota) -> Unit
 
 @Composable
 private fun CartaoDePainel(cartao: CartaoPainel, aoClicar: () -> Unit) {
-    val cores = coresDa(classificacaoDoCartao(cartao.tipo))
+    val classificacao = classificacaoDoCartao(cartao.tipo)
+    val cores = coresDa(classificacao)
     CartaoSimples(aoClicar = aoClicar) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Contador(cartao.quantidade, cores.fundo, cores.texto)
             Column(modifier = Modifier.padding(start = 12.dp)) {
-                Text(cartao.tipo.titulo, fontWeight = FontWeight.SemiBold)
+                Text(
+                    "${simboloDa(classificacao)} ${cartao.tipo.titulo}",
+                    fontWeight = FontWeight.SemiBold,
+                )
                 Text(
                     cartao.tipo.acao,
                     style = MaterialTheme.typography.bodySmall,
