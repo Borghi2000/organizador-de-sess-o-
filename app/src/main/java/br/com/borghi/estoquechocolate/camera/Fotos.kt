@@ -2,6 +2,11 @@ package br.com.borghi.estoquechocolate.camera
 
 import android.content.Context
 import android.graphics.BitmapFactory
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.unit.dp
 import java.io.File
 
 /**
@@ -36,4 +41,28 @@ object Fotos {
             pasta(contexto).listFiles()?.forEach { if (it.name !in emUso) it.delete() }
         }
     }
+}
+
+/**
+ * Mostra uma foto guardada, se ela ainda existir. Foto apagada do aparelho nao quebra a tela:
+ * simplesmente nao aparece.
+ */
+@androidx.compose.runtime.Composable
+fun FotoGuardada(
+    nome: String,
+    descricao: String,
+    modifier: androidx.compose.ui.Modifier = androidx.compose.ui.Modifier,
+) {
+    val contexto = androidx.compose.ui.platform.LocalContext.current
+    val imagem = androidx.compose.runtime.remember(nome) { Fotos.carregar(contexto, nome) } ?: return
+
+    androidx.compose.foundation.Image(
+        bitmap = imagem.asImageBitmap(),
+        contentDescription = descricao,
+        modifier = modifier
+            .fillMaxWidth()
+            .height(200.dp)
+            .clip(androidx.compose.foundation.shape.RoundedCornerShape(12.dp)),
+        contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+    )
 }

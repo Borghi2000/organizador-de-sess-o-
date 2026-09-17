@@ -21,6 +21,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import br.com.borghi.estoquechocolate.camera.CapturaDeFoto
+import br.com.borghi.estoquechocolate.camera.FotoGuardada
 import br.com.borghi.estoquechocolate.camera.Fotos
 import br.com.borghi.estoquechocolate.camera.LeitorDeCodigoDeBarras
 import br.com.borghi.estoquechocolate.core.modelo.Localizacao
@@ -178,6 +179,7 @@ fun NovoProdutoTela(
                 numerico = true,
                 apoio = "Opcional. E o que a camera usa para achar o produto num toque.",
             )
+            if (foto.isNotBlank()) FotoGuardada(foto, "Foto do produto")
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                 OutlinedButton(onClick = { lendoCodigo = true }, modifier = Modifier.weight(1f)) {
                     Text("Ler codigo")
@@ -244,6 +246,14 @@ fun DetalheDoLoteTela(vm: EstoqueViewModel, estado: EstadoDoEstoque, loteId: Str
 
     TelaBase("Lote ${lote.codigoLote}", aoVoltar = voltar) { padding ->
         ColunaRolavel(padding) {
+            if (lote.fotoEtiqueta.isNotBlank()) {
+                // Seis meses depois, numa divergencia, da para abrir a foto e conferir a etiqueta
+                // original em vez de discutir de memoria.
+                FotoGuardada(lote.fotoEtiqueta, "Etiqueta do lote ${lote.codigoLote}")
+            } else if (produto.foto.isNotBlank()) {
+                FotoGuardada(produto.foto, "Foto de ${produto.nome}")
+            }
+
             CartaoSimples {
                 Text(produto.nome, fontWeight = FontWeight.SemiBold)
                 Etiqueta("${simboloDa(classificacao)} ${classificacao.rotulo}", cores.fundo, cores.texto)
